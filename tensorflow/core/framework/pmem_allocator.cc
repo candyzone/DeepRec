@@ -15,6 +15,7 @@ limitations under the License.
 
 #include <atomic>
 
+#include "/usr/local/include/memkind.h"
 #include "tensorflow/core/framework/allocator.h"
 #include "tensorflow/core/framework/allocator_registry.h"
 #include "tensorflow/core/framework/tracking_allocator.h"
@@ -23,7 +24,6 @@ limitations under the License.
 #include "tensorflow/core/platform/mem.h"
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/types.h"
-#include "/usr/local/include/memkind.h"
 
 namespace tensorflow {
 
@@ -75,7 +75,7 @@ class PMEMAllocator : public Allocator {
                    << "% of system memory.";
     }
 
-    void* p = memkind_malloc(MEMKIND_DAX_KMEM,num_bytes);
+    void* p = memkind_malloc(MEMKIND_DAX_KMEM, num_bytes);
 
     if (pmem_allocator_collect_stats) {
       const std::size_t alloc_size = port::MallocExtension_GetAllocatedSize(p);
@@ -105,7 +105,7 @@ class PMEMAllocator : public Allocator {
       mutex_lock l(mu_);
       stats_.bytes_in_use -= alloc_size;
     }
-    memkind_free(MEMKIND_DAX_KMEM,ptr);
+    memkind_free(MEMKIND_DAX_KMEM, ptr);
   }
 
   absl::optional<AllocatorStats> GetStats() override {
@@ -136,14 +136,11 @@ class PMEMAllocator : public Allocator {
   TF_DISALLOW_COPY_AND_ASSIGN(PMEMAllocator);
 };
 
-
 class PMEMAllocatorFactory : public AllocatorFactory {
  public:
   Allocator* CreateAllocator() override { return CreatePMEMAllocator(); }
 
-  Allocator* CreatePMEMAllocator() override {
-    return new PMEMAllocator;
-  }
+  Allocator* CreatePMEMAllocator() override { return new PMEMAllocator; }
 
   SubAllocator* CreateSubAllocator(int numa_node) override {
     return new PMEMSubAllocator(new PMEMAllocator);
@@ -162,6 +159,7 @@ class PMEMAllocatorFactory : public AllocatorFactory {
     void Free(void* ptr, size_t num_bytes) override {
       pmem_allocator_->DeallocateRaw(ptr);
     }
+
    private:
     PMEMAllocator* pmem_allocator_;
   };

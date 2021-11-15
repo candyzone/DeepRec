@@ -1014,7 +1014,9 @@ cc_library(
         "framework/type_traits.h",
     ] + select({
         "//tensorflow:with_pmem_support": [
-            "framework/pmem_allocator.cc"
+            "framework/pmem_allocator.cc",
+            "framework/experimental_pmem_allocator.cc",
+            "framework/experimental_pmem_allocator_utils.cc",
         ],
         "//conditions:default": [],
     }),
@@ -1027,7 +1029,8 @@ cc_library(
     linkopts = select({
         "//tensorflow:with_pmem_support": [
             "-L/usr/local/lib",
-            "-lmemkind"
+            "-lmemkind",
+            "-lpmem",
         ],
         "//conditions:default": [],
     }),
@@ -2958,6 +2961,8 @@ tf_cuda_library(
             "framework/allocator.cc",
             "framework/cpu_allocator_impl.cc",
             "framework/pmem_allocator.cc",
+            "framework/experimental_pmem_allocator.cc",
+            "framework/experimental_pmem_allocator_utils.cc",
             "framework/allocator_registry.cc",
             "framework/tracking_allocator.cc",
             "example/example_parser_configuration.*",
