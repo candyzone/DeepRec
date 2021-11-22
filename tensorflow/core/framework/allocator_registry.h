@@ -38,11 +38,11 @@ class AllocatorFactory {
   // Create an Allocator.
   virtual Allocator* CreateAllocator() = 0;
 
-  //Create PMEM Allocator.
-  virtual Allocator* CreatePMEMAllocator() {return CreateAllocator();};
+  // Create PMEM Allocator.
+  virtual Allocator* CreatePMEMAllocator() { return CreateAllocator(); };
 
-  //Create EV Allocator.
-  virtual Allocator* CreateEVAllocator() {return CreateAllocator();};
+  // Create EV Allocator.
+  virtual Allocator* CreateEVAllocator() { return CreateAllocator(); };
 
   // Create a SubAllocator. If NumaEnabled() is true, then returned SubAllocator
   // will allocate memory local to numa_node.  If numa_node == kNUMANoAffinity
@@ -77,8 +77,10 @@ class AllocatorFactoryRegistry {
   // been registered with the same priority, picks one by unspecified criteria.
   Allocator* GetAllocator();
 
-  //If use PMEMallocator, then factory pick this one
+  // If use PMEMallocator, then factory pick this one
   Allocator* GetPMEMAllocator();
+
+  Allocator* GetExperimentalPMEMAllocator();
 
   Allocator* GetEVAllocator();
 

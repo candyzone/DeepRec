@@ -20,9 +20,7 @@ ExperimentalPMemAllocator::NewExperimentalPMemAllocator(
     const ExperimentalPMemAllocatorConfig& config) {
   int cnt = 0;
   if (++cnt > 1) {
-    fprintf(stderr,
-            "****########### create %dth pmem allocator ###############****\n",
-            cnt);
+    LOG(WARNING) << "###### create pmem allocator" << pmem_file << " ########";
   }
   if (!ExperimentalPMemAllocator::ValidateConfig(config)) {
     return nullptr;

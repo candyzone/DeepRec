@@ -358,7 +358,7 @@ class ExperimentalPMEMAllocatorFactory : public AllocatorFactory {
   static std::atomic<uint64_t> allocator_cnt_{0};
 };
 
-REGISTER_MEM_ALLOCATOR("ExperimentalPMEMAllocator", 30,
+REGISTER_MEM_ALLOCATOR("ExperimentalPMEMAllocator", 20,
                        ExperimentalPMEMAllocatorFactory);
 
 }  // namespace tensorflow

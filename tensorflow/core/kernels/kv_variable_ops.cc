@@ -19,6 +19,8 @@ limitations under the License.
 #define EIGEN_USE_GPU
 #endif
 
+#include "tensorflow/core/kernels/kv_variable_ops.h"
+
 #include "tensorflow/core/framework/bounds_check.h"
 #include "tensorflow/core/framework/embedding/config.pb.h"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -27,7 +29,6 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/kernels/dense_update_functor.h"
 #include "tensorflow/core/kernels/gather_functor.h"
-#include "tensorflow/core/kernels/kv_variable_ops.h"
 #include "tensorflow/core/kernels/scatter_functor.h"
 #include "tensorflow/core/kernels/training_op_helpers.h"
 #include "tensorflow/core/kernels/variable_ops.h"
@@ -43,13 +44,13 @@ namespace tensorflow {
 namespace {
 const int64 kEmbeddingVarUseDB = -214;
 const int64 kInitializableEmbeddingVarUseDB = -215;
-}
+}  // namespace
 
-#define REGISTER_KV_VAR_HANDLE(ktype, vtype)                           \
-  REGISTER_KERNEL_BUILDER(Name("KvVarHandleOp")                        \
-                          .Device(DEVICE_CPU)                          \
-                          .TypeConstraint<ktype>("Tkeys")              \
-                          .TypeConstraint<vtype>("dtype"),             \
+#define REGISTER_KV_VAR_HANDLE(ktype, vtype)                   \
+  REGISTER_KERNEL_BUILDER(Name("KvVarHandleOp")                \
+                              .Device(DEVICE_CPU)              \
+                              .TypeConstraint<ktype>("Tkeys")  \
+                              .TypeConstraint<vtype>("dtype"), \
                           ResourceHandleOp<EmbeddingVar<ktype, vtype>>);
 REGISTER_KV_VAR_HANDLE(int32, float)
 REGISTER_KV_VAR_HANDLE(int64, float)
@@ -62,8 +63,7 @@ class KvVariableShapeOp : public OpKernel {
 
   void Compute(OpKernelContext* ctx) override {
     EmbeddingVar<TKey, TValue>* ev = nullptr;
-    OP_REQUIRES_OK(ctx,
-                   LookupResource(ctx, HandleFromInput(ctx, 0), &ev));
+    OP_REQUIRES_OK(ctx, LookupResource(ctx, HandleFromInput(ctx, 0), &ev));
     core::ScopedUnref unref_me(ev);
     TensorShape shape({ev->Size(), ev->ValueLen()});
     Tensor* output;
@@ -74,12 +74,12 @@ class KvVariableShapeOp : public OpKernel {
   }
 };
 
-#define REGISTER_KV_VARIABLE_SHAPE(type, ktype, vtype)                \
-  REGISTER_KERNEL_BUILDER(                                            \
-      Name("KvVariableShape").Device(DEVICE_CPU)                      \
-                             .TypeConstraint<type>("out_type")        \
-                             .TypeConstraint<ktype>("Tkeys"),         \
-                             KvVariableShapeOp<type, ktype, vtype>);
+#define REGISTER_KV_VARIABLE_SHAPE(type, ktype, vtype)          \
+  REGISTER_KERNEL_BUILDER(Name("KvVariableShape")               \
+                              .Device(DEVICE_CPU)               \
+                              .TypeConstraint<type>("out_type") \
+                              .TypeConstraint<ktype>("Tkeys"),  \
+                          KvVariableShapeOp<type, ktype, vtype>);
 REGISTER_KV_VARIABLE_SHAPE(int32, int32, float)
 REGISTER_KV_VARIABLE_SHAPE(int32, int64, float)
 REGISTER_KV_VARIABLE_SHAPE(int64, int32, float)
@@ -119,11 +119,11 @@ class InitializeKvVariableOp : public OpKernel {
     OP_REQUIRES(c, shape_.dims() == 1,
                 errors::InvalidArgument("KvVariable dimension must be 1"));
 
-     // get ev emb_index
+    // get ev emb_index
     OP_REQUIRES_OK(c, c->GetAttr("emb_index", &emb_index_));
-     // get ev block_num
+    // get ev block_num
     OP_REQUIRES_OK(c, c->GetAttr("block_num", &block_num_));
-     // get ev slot_index
+    // get ev slot_index
     OP_REQUIRES_OK(c, c->GetAttr("slot_index", &slot_index_));
 
     OP_REQUIRES_OK(c, c->GetAttr("steps_to_live", &steps_to_live_));
@@ -134,7 +134,8 @@ class InitializeKvVariableOp : public OpKernel {
 
     OP_REQUIRES_OK(c, c->GetAttr("max_element_size", &max_element_size_));
 
-    OP_REQUIRES_OK(c, c->GetAttr("false_positive_probability", &false_positive_probability_));
+    OP_REQUIRES_OK(c, c->GetAttr("false_positive_probability",
+                                 &false_positive_probability_));
 
     OP_REQUIRES_OK(c, c->GetAttr("l2_weight_threshold", &l2_weight_threshold_));
 
@@ -154,11 +155,11 @@ class InitializeKvVariableOp : public OpKernel {
     if (steps_to_live_ == kEmbeddingVarUseDB ||
         steps_to_live_ == kInitializableEmbeddingVarUseDB) {
       LOG(INFO) << "hashmap use db";
-      //use_db_ = true;
+      // use_db_ = true;
     } else {
       OP_REQUIRES(c, steps_to_live_ >= 0,
-                 errors::InvalidArgument(
-                    "steps_to_live must >= 0, ", std::to_string(steps_to_live_)));
+                  errors::InvalidArgument("steps_to_live must >= 0, ",
+                                          std::to_string(steps_to_live_)));
     }
     OP_REQUIRES_OK(c, c->GetAttr("ht_type", &ht_type_));
     OP_REQUIRES_OK(c, c->GetAttr("ht_partition_num", &ht_partition_num_));
@@ -183,7 +184,6 @@ class InitializeKvVariableOp : public OpKernel {
 
     if (handle_self.name() == handle_primary.name() &&
         handle_self.container() == handle_primary.container()) {
-
       OP_REQUIRES_OK(
         context,
         LookupOrCreateResource<EmbeddingVar<TKey, TValue>>(
@@ -268,15 +268,15 @@ class InitializeKvVariableOp : public OpKernel {
   int64 default_value_dim_;
 };
 
-#define REGISTER_KERNELS(ktype, vtype)                               \
-  REGISTER_KERNEL_BUILDER(Name("InitializeKvVariableOp")             \
-                              .Device(DEVICE_CPU)                    \
-                              .TypeConstraint<ktype>("Tkeys")        \
-                              .TypeConstraint<vtype>("dtype"),       \
+#define REGISTER_KERNELS(ktype, vtype)                         \
+  REGISTER_KERNEL_BUILDER(Name("InitializeKvVariableOp")       \
+                              .Device(DEVICE_CPU)              \
+                              .TypeConstraint<ktype>("Tkeys")  \
+                              .TypeConstraint<vtype>("dtype"), \
                           InitializeKvVariableOp<ktype, vtype>);
 
-#define REGISTER_CPU_KERNELS(T)        \
-  REGISTER_KERNELS(int32, T);     \
+#define REGISTER_CPU_KERNELS(T) \
+  REGISTER_KERNELS(int32, T);   \
   REGISTER_KERNELS(int64, T);
 
 TF_CALL_float(REGISTER_CPU_KERNELS);
@@ -294,7 +294,9 @@ class KvResourceIsInitializedOp : public OpKernel {
     OP_REQUIRES_OK(ctx, ctx->allocate_output(0, {}, &output));
     EmbeddingVar<TKey, TValue>* ev = nullptr;
     bool found;
-    if (LookupResource<EmbeddingVar<TKey, TValue>>(ctx, HandleFromInput(ctx, 0), &ev).ok()) {
+    if (LookupResource<EmbeddingVar<TKey, TValue>>(ctx, HandleFromInput(ctx, 0),
+                                                   &ev)
+            .ok()) {
       found = ev->IsInitialized();
       ev->Unref();
     } else {
@@ -304,10 +306,10 @@ class KvResourceIsInitializedOp : public OpKernel {
     output->flat<bool>()(0) = found;
   }
 };
-#define REGISTER_KERNELS(ktype, vtype)                             \
-  REGISTER_KERNEL_BUILDER(Name("KvVarIsInitializedOp")             \
-                          .TypeConstraint<ktype>("Tkeys")          \
-                          .Device(DEVICE_CPU),                     \
+#define REGISTER_KERNELS(ktype, vtype)                        \
+  REGISTER_KERNEL_BUILDER(Name("KvVarIsInitializedOp")        \
+                              .TypeConstraint<ktype>("Tkeys") \
+                              .Device(DEVICE_CPU),            \
                           KvResourceIsInitializedOp<ktype, vtype>);
 REGISTER_KERNELS(int32, float)
 REGISTER_KERNELS(int64, float)
@@ -341,7 +343,8 @@ class KvResourceGatherOp : public OpKernel {
       auto indices_flat = indices.flat<TKey>();
       const int64 indices_size = static_cast<int64>(indices_flat.dimension(0));
       const int64 slice_elems = out_flat.dimension(1);
-      OP_REQUIRES(c, ev->ValueLen() == slice_elems,
+      OP_REQUIRES(
+          c, ev->ValueLen() == slice_elems,
           errors::InvalidArgument(
               "ev's value_len should same with output's dimension(1)",
               std::to_string(slice_elems), std::to_string(ev->ValueLen())));
@@ -386,15 +389,15 @@ class KvResourceGatherOp : public OpKernel {
     bool is_use_default_value_tensor_;
 };
 
-#define REGISTER_GATHER_FULL(dev, ktype, vtype)                   \
-  REGISTER_KERNEL_BUILDER(Name("KvResourceGather")                \
-                              .Device(DEVICE_##dev)               \
-                              .HostMemory("resource")             \
-                              .HostMemory("indices")              \
-                              .HostMemory("default_value")        \
-                              .HostMemory("output")               \
-                              .TypeConstraint<vtype>("dtype")     \
-                              .TypeConstraint<ktype>("Tkeys"),    \
+#define REGISTER_GATHER_FULL(dev, ktype, vtype)                \
+  REGISTER_KERNEL_BUILDER(Name("KvResourceGather")             \
+                              .Device(DEVICE_##dev)            \
+                              .HostMemory("resource")          \
+                              .HostMemory("indices")           \
+                              .HostMemory("default_value")     \
+                              .HostMemory("output")            \
+                              .TypeConstraint<vtype>("dtype")  \
+                              .TypeConstraint<ktype>("Tkeys"), \
                           KvResourceGatherOp<ktype, vtype>)
 
 #define REGISTER_GATHER_ALL_INDICES(dev, type) \
@@ -406,7 +409,7 @@ class KvResourceGatherOp : public OpKernel {
 // Registration of the CPU implementations.
 TF_CALL_float(REGISTER_GATHER_CPU);
 TF_CALL_double(REGISTER_GATHER_CPU);
-//TF_CALL_QUANTIZED_TYPES(REGISTER_GATHER_CPU);
+// TF_CALL_QUANTIZED_TYPES(REGISTER_GATHER_CPU);
 
 #undef REGISTER_GATHER_CPU
 #undef REGISTER_GATHER_ALL_INDICES
@@ -506,9 +509,10 @@ class KvResourceImportOp : public OpKernel {
     OP_REQUIRES_OK(c, c->GetAttr("steps_to_live", &steps_to_live_));
     OP_REQUIRES(c, steps_to_live_ >= 0,
                  errors::InvalidArgument(
-                    "steps_to_live must >= 0, ", std::to_string(steps_to_live_)));
-    OP_REQUIRES_OK(c, c->GetAttr("ht_type", &ht_type_));
-    OP_REQUIRES_OK(c, c->GetAttr("ht_partition_num", &ht_partition_num_));
+                    "steps_to_live must >= 0, ",
+std::to_string(steps_to_live_))); OP_REQUIRES_OK(c, c->GetAttr("ht_type",
+&ht_type_)); OP_REQUIRES_OK(c, c->GetAttr("ht_partition_num",
+&ht_partition_num_));
   }
 
   void Compute(OpKernelContext* context) override {
@@ -537,9 +541,9 @@ class KvResourceImportOp : public OpKernel {
     const Tensor& keys = context->input(3);
     const Tensor& values = context->input(4);
     const Tensor& versions = context->input(5);
-    LOG(INFO) <<  "EV:" << HandleFromInput(context, 0).name() << ", Import Size:" <<  keys.dim_size(0);
-    OP_REQUIRES_OK(context, hashmap->Import(keys, values, versions));
-    variable->SetInitialized();
+    LOG(INFO) <<  "EV:" << HandleFromInput(context, 0).name() << ", Import
+Size:" <<  keys.dim_size(0); OP_REQUIRES_OK(context, hashmap->Import(keys,
+values, versions)); variable->SetInitialized();
   }
 
  private:
@@ -565,7 +569,7 @@ TF_CALL_QUANTIZED_TYPES(REGISTER_KERNELS_ALL_INDEX);
 #undef REGISTER_KERNELS
 */
 template <typename TKey, typename TValue>
-class KvResourceImportV2Op: public OpKernel {
+class KvResourceImportV2Op : public OpKernel {
  public:
   explicit KvResourceImportV2Op(OpKernelConstruction* c) : OpKernel(c) {
     OP_REQUIRES_OK(c, c->GetAttr("dtype", &dtype_));
@@ -575,29 +579,30 @@ class KvResourceImportV2Op: public OpKernel {
                 errors::InvalidArgument("KvVariable dimension must be 1"));
     OP_REQUIRES_OK(c, c->GetAttr("steps_to_live", &steps_to_live_));
     OP_REQUIRES(c, steps_to_live_ >= 0,
-                 errors::InvalidArgument(
-                    "steps_to_live must >= 0, ", std::to_string(steps_to_live_)));
+                errors::InvalidArgument("steps_to_live must >= 0, ",
+                                        std::to_string(steps_to_live_)));
     OP_REQUIRES_OK(c, c->GetAttr("partition_id", &partition_id_));
     OP_REQUIRES(c, partition_id_ >= 0,
-                 errors::InvalidArgument(
-                    "partition_id must >= 0, ", std::to_string(partition_id_)));
+                errors::InvalidArgument("partition_id must >= 0, ",
+                                        std::to_string(partition_id_)));
     OP_REQUIRES_OK(c, c->GetAttr("partition_num", &partition_num_));
     OP_REQUIRES(c, partition_num_ >= 1,
-                 errors::InvalidArgument(
-                    "partition_num must >= 1, ", std::to_string(partition_num_)));
-    //OP_REQUIRES_OK(c, c->GetAttr("restore_versions", &restore_versions_));
+                errors::InvalidArgument("partition_num must >= 1, ",
+                                        std::to_string(partition_num_)));
+    // OP_REQUIRES_OK(c, c->GetAttr("restore_versions", &restore_versions_));
     OP_REQUIRES_OK(c, c->GetAttr("ht_type", &ht_type_));
     OP_REQUIRES_OK(c, c->GetAttr("ht_partition_num", &ht_partition_num_));
     // get ev emb_index
     OP_REQUIRES_OK(c, c->GetAttr("emb_index", &emb_index_));
-      // get ev slot_index
+    // get ev slot_index
     OP_REQUIRES_OK(c, c->GetAttr("slot_index", &slot_index_));
     OP_REQUIRES_OK(c, c->GetAttr("filter_freq", &filter_freq_));
     OP_REQUIRES_OK(c, c->GetAttr("block_num", &block_num_));
 
     OP_REQUIRES_OK(c, c->GetAttr("max_element_size", &max_element_size_));
 
-    OP_REQUIRES_OK(c, c->GetAttr("false_positive_probability", &false_positive_probability_));
+    OP_REQUIRES_OK(c, c->GetAttr("false_positive_probability",
+                                 &false_positive_probability_));
     OP_REQUIRES_OK(c, c->GetAttr("l2_weight_threshold", &l2_weight_threshold_));
     OP_REQUIRES_OK(c, c->GetAttr("layout", &layout_));
     OP_REQUIRES_OK(c, c->GetAttr("max_freq", &max_freq_));
@@ -614,12 +619,11 @@ class KvResourceImportV2Op: public OpKernel {
     const std::string file_name_string = file_name.scalar<string>()();
     const Tensor& name = context->input(4);
     const std::string name_string = name.scalar<string>()();
-	  const Tensor& default_values = context->input(3);
+    const Tensor& default_values = context->input(3);
     OP_REQUIRES(context, dtype_ == default_values.dtype(),
                 errors::InvalidArgument(
                     "Variable and ddd value dtypes don't match; respectively, ",
                     dtype_, " and ", default_values.dtype()));
-
 
     ResourceHandle handle_self = HandleFromInput(context, 1);
     ResourceHandle handle_primary = HandleFromInput(context, 2);
@@ -630,7 +634,7 @@ class KvResourceImportV2Op: public OpKernel {
     int64 slotnum = slotnum_tensor.scalar<int64>()();
 
     if (handle_self.name() == handle_primary.name() &&
-         handle_self.container() == handle_primary.container()) {
+        handle_self.container() == handle_primary.container()) {
       OP_REQUIRES_OK(
         context,
         LookupOrCreateResource<EmbeddingVar<TKey, TValue>>(
@@ -693,11 +697,11 @@ class KvResourceImportV2Op: public OpKernel {
     BundleReader reader(Env::Default(), file_name_string);
     OP_REQUIRES_OK(context, reader.status());
 
-    EVRestoreDynamically(ev, name_string, partition_id_, partition_num_, context, &reader,
-                         "-partition_offset", "-keys", "-values", "-versions", "-freqs");
+    EVRestoreDynamically(ev, name_string, partition_id_, partition_num_,
+                         context, &reader, "-partition_offset", "-keys",
+                         "-values", "-versions", "-freqs");
     ev->SetInitialized();
   }
-
 
  private:
   int64 partition_id_;
@@ -724,34 +728,33 @@ class KvResourceImportV2Op: public OpKernel {
 
 #define REGISTER_KERNELS(ktype, vtype)                         \
   REGISTER_KERNEL_BUILDER(Name("KvResourceImportV2")           \
-                            .Device(DEVICE_CPU)                \
-                            .TypeConstraint<ktype>("Tkeys")    \
-                            .TypeConstraint<vtype>("dtype"),   \
+                              .Device(DEVICE_CPU)              \
+                              .TypeConstraint<ktype>("Tkeys")  \
+                              .TypeConstraint<vtype>("dtype"), \
                           KvResourceImportV2Op<ktype, vtype>);
-#define REGISTER_KERNELS_ALL_INDEX(type)                       \
-  REGISTER_KERNELS(int32, type)                                \
+#define REGISTER_KERNELS_ALL_INDEX(type) \
+  REGISTER_KERNELS(int32, type)          \
   REGISTER_KERNELS(int64, type)
 TF_CALL_float(REGISTER_KERNELS_ALL_INDEX);
 TF_CALL_double(REGISTER_KERNELS_ALL_INDEX);
-//TF_CALL_QUANTIZED_TYPES(REGISTER_KERNELS_ALL_INDEX);
+// TF_CALL_QUANTIZED_TYPES(REGISTER_KERNELS_ALL_INDEX);
 #undef REGISTER_KERNELS_ALL_INDEX
 #undef REGISTER_KERNELS
 
 template <typename TKey, typename TValue>
-class KvResourceIncrImportOp: public OpKernel {
+class KvResourceIncrImportOp : public OpKernel {
  public:
   explicit KvResourceIncrImportOp(OpKernelConstruction* c) : OpKernel(c) {
     OP_REQUIRES_OK(c, c->GetAttr("dtype", &dtype_));
 
     OP_REQUIRES_OK(c, c->GetAttr("partition_id", &partition_id_));
     OP_REQUIRES(c, partition_id_ >= 0,
-                 errors::InvalidArgument(
-                    "partition_id must >= 0, ", std::to_string(partition_id_)));
+                errors::InvalidArgument("partition_id must >= 0, ",
+                                        std::to_string(partition_id_)));
     OP_REQUIRES_OK(c, c->GetAttr("partition_num", &partition_num_));
     OP_REQUIRES(c, partition_num_ >= 1,
-                 errors::InvalidArgument(
-                    "partition_num must >= 1, ", std::to_string(partition_num_)));
-
+                errors::InvalidArgument("partition_num must >= 1, ",
+                                        std::to_string(partition_num_)));
   }
 
   void Compute(OpKernelContext* context) override {
@@ -761,17 +764,19 @@ class KvResourceIncrImportOp: public OpKernel {
     const std::string name_string = name.scalar<string>()();
 
     EmbeddingVar<TKey, TValue>* ev = nullptr;
-    OP_REQUIRES_OK(context, LookupResource(context, HandleFromInput(context, 1), &ev));
-
+    OP_REQUIRES_OK(context,
+                   LookupResource(context, HandleFromInput(context, 1), &ev));
 
     core::ScopedUnref unref_me(ev);
 
     BundleReader reader(Env::Default(), file_name_string);
     OP_REQUIRES_OK(context, reader.status());
 
-    LOG(INFO) << "incr import, evname:" << name_string << "partition_num:" <<partition_num_;
-    EVRestoreDynamically(ev, name_string, partition_id_, partition_num_, context, &reader,
-                         "-incr_partition_offset", "-sparse_incr_keys", "-sparse_incr_values",
+    LOG(INFO) << "incr import, evname:" << name_string
+              << "partition_num:" << partition_num_;
+    EVRestoreDynamically(ev, name_string, partition_id_, partition_num_,
+                         context, &reader, "-incr_partition_offset",
+                         "-sparse_incr_keys", "-sparse_incr_values",
                          "-sparse_incr_versions", "-sparse_incr_freqs");
     ev->SetInitialized();
   }
@@ -787,62 +792,65 @@ class KvResourceIncrImportOp: public OpKernel {
   int64 ht_partition_num_;
 };
 
-
 #define REGISTER_KERNELS(ktype, vtype)                         \
   REGISTER_KERNEL_BUILDER(Name("KvResourceIncrImport")         \
-                            .Device(DEVICE_CPU)                \
-                            .TypeConstraint<ktype>("Tkeys")    \
-                            .TypeConstraint<vtype>("dtype"),   \
+                              .Device(DEVICE_CPU)              \
+                              .TypeConstraint<ktype>("Tkeys")  \
+                              .TypeConstraint<vtype>("dtype"), \
                           KvResourceIncrImportOp<ktype, vtype>);
-#define REGISTER_KERNELS_ALL_INDEX(type)                       \
-  REGISTER_KERNELS(int32, type)                                \
+#define REGISTER_KERNELS_ALL_INDEX(type) \
+  REGISTER_KERNELS(int32, type)          \
   REGISTER_KERNELS(int64, type)
 TF_CALL_float(REGISTER_KERNELS_ALL_INDEX);
 TF_CALL_double(REGISTER_KERNELS_ALL_INDEX);
-//TF_CALL_QUANTIZED_TYPES(REGISTER_KERNELS_ALL_INDEX);
+// TF_CALL_QUANTIZED_TYPES(REGISTER_KERNELS_ALL_INDEX);
 #undef REGISTER_KERNELS_ALL_INDEX
 #undef REGISTER_KERNELS
 
 // Op that outputs tensors of all keys and all values.
-template<typename TKey, typename TValue>
+template <typename TKey, typename TValue>
 class KvResourceExportOp : public OpKernel {
  public:
-  explicit KvResourceExportOp(OpKernelConstruction *ctx) : OpKernel(ctx) {}
+  explicit KvResourceExportOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
 
-  void Compute(OpKernelContext *ctx) override {
-    EmbeddingVar<TKey, TValue> *ev = nullptr;
+  void Compute(OpKernelContext* ctx) override {
+    EmbeddingVar<TKey, TValue>* ev = nullptr;
     OP_REQUIRES_OK(ctx, LookupResource(ctx, HandleFromInput(ctx, 0), &ev));
     core::ScopedUnref unref_me(ev);
     std::vector<TKey> tot_key_list;
-    std::vector<TValue *> tot_valueptr_list;
+    std::vector<TValue*> tot_valueptr_list;
     std::vector<int64> tot_version_list;
     std::vector<int64> tot_freq_list;
-    int64 total_size = ev->GetSnapshot(&tot_key_list, &tot_valueptr_list, &tot_version_list, &tot_freq_list);
+    int64 total_size = ev->GetSnapshot(&tot_key_list, &tot_valueptr_list,
+                                       &tot_version_list, &tot_freq_list);
 
     // Create an output tensor
-    Tensor *keys_output_tensor = NULL;
-    Tensor *values_output_tensor = NULL;
-    Tensor *versions_output_tensor = NULL;
-    Tensor *freq_output_tensor = NULL;
+    Tensor* keys_output_tensor = NULL;
+    Tensor* values_output_tensor = NULL;
+    Tensor* versions_output_tensor = NULL;
+    Tensor* freq_output_tensor = NULL;
 
     OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({total_size}),
                                              &keys_output_tensor));
-    OP_REQUIRES_OK(ctx, ctx->allocate_output(1, TensorShape({total_size, ev->ValueLen()}),
-                                             &values_output_tensor));
-    OP_REQUIRES_OK(ctx, ctx->allocate_output(2, TensorShape({tot_version_list.size()}),
-                                             &versions_output_tensor));
-    OP_REQUIRES_OK(ctx, ctx->allocate_output(3, TensorShape({tot_freq_list.size()}),
-                                             &freq_output_tensor));
+    OP_REQUIRES_OK(
+        ctx, ctx->allocate_output(1, TensorShape({total_size, ev->ValueLen()}),
+                                  &values_output_tensor));
+    OP_REQUIRES_OK(
+        ctx, ctx->allocate_output(2, TensorShape({tot_version_list.size()}),
+                                  &versions_output_tensor));
+    OP_REQUIRES_OK(ctx,
+                   ctx->allocate_output(3, TensorShape({tot_freq_list.size()}),
+                                        &freq_output_tensor));
 
     auto keys_output = keys_output_tensor->template flat<TKey>();
     auto val_matrix = values_output_tensor->matrix<TValue>();
     auto versions_output = versions_output_tensor->template flat<int64>();
     auto freq_output = freq_output_tensor->template flat<int64>();
 
-    for(size_t i = 0; i < total_size; i++) {
+    for (size_t i = 0; i < total_size; i++) {
       keys_output(i) = tot_key_list[i];
-      TValue *value = tot_valueptr_list[i];
-      for(int64 m = 0; m < ev->ValueLen(); m++) {
+      TValue* value = tot_valueptr_list[i];
+      for (int64 m = 0; m < ev->ValueLen(); m++) {
         val_matrix(i, m) = *(value + m);
       }
       if (tot_version_list.size() != 0) {
@@ -855,14 +863,14 @@ class KvResourceExportOp : public OpKernel {
   }
 };
 
-#define REGISTER_KERNELS(ktype, vtype)                         \
-  REGISTER_KERNEL_BUILDER(Name("KvResourceExport")             \
-                            .Device(DEVICE_CPU)                \
-                            .TypeConstraint<ktype>("Tkeys")    \
-                            .TypeConstraint<vtype>("Tvalues"), \
+#define REGISTER_KERNELS(ktype, vtype)                           \
+  REGISTER_KERNEL_BUILDER(Name("KvResourceExport")               \
+                              .Device(DEVICE_CPU)                \
+                              .TypeConstraint<ktype>("Tkeys")    \
+                              .TypeConstraint<vtype>("Tvalues"), \
                           KvResourceExportOp<ktype, vtype>);
-#define REGISTER_KERNELS_ALL_INDEX(type)                       \
-  REGISTER_KERNELS(int32, type)                                \
+#define REGISTER_KERNELS_ALL_INDEX(type) \
+  REGISTER_KERNELS(int32, type)          \
   REGISTER_KERNELS(int64, type)
 
 REGISTER_KERNELS_ALL_INDEX(float);
@@ -884,8 +892,9 @@ class KvResourceInsertOp : public OpKernel {
     const Tensor& keys = ctx->input(1);
     const Tensor& values = ctx->input(2);
     const Tensor& versions = ctx->input(3);
-    LOG(INFO) <<  "EV:" << HandleFromInput(ctx, 0).name() << ", Incr Import Size:" <<  keys.dim_size(0);
-    OP_REQUIRES_OK(ctx, hashmap->Import(keys, values, versions));
+    LOG(INFO) <<  "EV:" << HandleFromInput(ctx, 0).name() << ", Incr Import
+Size:" <<  keys.dim_size(0); OP_REQUIRES_OK(ctx, hashmap->Import(keys, values,
+versions));
   }
  private:
   DataType dtype_;
@@ -905,4 +914,3 @@ TF_CALL_QUANTIZED_TYPES(REGISTER_KERNELS_ALL_INDEX);
 #undef REGISTER_KERNELS
 */
 }  // namespace tensorflow
-
