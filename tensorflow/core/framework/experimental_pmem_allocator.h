@@ -18,7 +18,7 @@
 namespace tensorflow {
 
 // these should be configurable, hard code them for now
-constexpr std::string kPMemAllocatorPath = "/mnt/pmem0/pmem_allocator/";
+const string kPMemAllocatorPath = "/mnt/pmem0/pmem_allocator/";
 constexpr uint64_t kPMemSize = 128ULL << 30;
 constexpr uint64_t kMaxAccessThreads = 64;
 
@@ -113,9 +113,11 @@ class ExperimentalPMemAllocator : public Allocator {
   void ClearStats() override {}
 
   size_t AllocatedSizeSlow(const void* ptr) const override {
-    auto segment = Addr2Segment(ptr);
-    assert(segment < segment_record_size_.size());
-    return segment_record_size_[segment];
+    return 0;
+    // TODO: return allocated size
+    // auto segment = Addr2Segment(ptr);
+    // assert(segment < segment_record_size_.size());
+    // return segment_record_size_[segment];
   }
 
   static bool ValidateConfig(const ExperimentalPMemAllocatorConfig& config) {
@@ -251,7 +253,7 @@ class ExperimentalPMemAllocator : public Allocator {
     // block_size_, each array corresponding to a dedicated block size which is
     // equal to its index
     FixVector<FreeList> freelists;
-    // Thread own segments, each segment corresponding to a dedicated block size
+    // AllocatorThread own segments, each segment corresponding to a dedicated block size
     // which is equal to its index
     FixVector<Segment> segments;
     // Protect freelists;
@@ -283,6 +285,7 @@ class ExperimentalPMemAllocator : public Allocator {
     return data_size / block_size_ + (data_size % block_size_ == 0 ? 0 : 1);
   }
 
+  char* pmem_;
   const uint64_t pmem_size_;
   const uint64_t segment_size_;
   const uint32_t block_size_;
@@ -290,7 +293,6 @@ class ExperimentalPMemAllocator : public Allocator {
   const uint32_t bg_thread_interval_;
   const uint64_t max_allocation_size_;
 
-  char* pmem_;
   SpaceEntryPool pool_;
   std::atomic<uint64_t> segment_head_;
   std::vector<uint32_t> segment_record_size_;
@@ -305,7 +307,7 @@ class ExperimentalPMemAllocator : public Allocator {
 
   uint64_t instance_id_;
   static std::atomic<uint64_t> next_instance_;
-  static thread_local std::vector<Thread> access_threads_;
+  static thread_local std::vector<AllocatorThread> access_threads_;
 };
 
 class ExperimentalPMEMAllocatorFactory : public AllocatorFactory {
@@ -355,10 +357,6 @@ class ExperimentalPMEMAllocatorFactory : public AllocatorFactory {
    private:
     Allocator* pmem_allocator_;
   };
-  static std::atomic<uint64_t> allocator_cnt_{0};
+  std::atomic<uint64_t> allocator_cnt_{0};
 };
-
-REGISTER_MEM_ALLOCATOR("ExperimentalPMEMAllocator", 20,
-                       ExperimentalPMEMAllocatorFactory);
-
 }  // namespace tensorflow

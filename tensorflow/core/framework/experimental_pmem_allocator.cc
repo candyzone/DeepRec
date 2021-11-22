@@ -11,7 +11,8 @@
 namespace tensorflow {
 
 std::atomic<uint64_t> ExperimentalPMemAllocator::next_instance_(0);
-thread_local std::vector<Thread> ExperimentalPMemAllocator::access_threads_(0);
+thread_local std::vector<AllocatorThread>
+    ExperimentalPMemAllocator::access_threads_(0);
 
 ExperimentalPMemAllocator*
 ExperimentalPMemAllocator::NewExperimentalPMemAllocator(
@@ -133,17 +134,17 @@ ExperimentalPMemAllocator::ExperimentalPMemAllocator(
     const ExperimentalPMemAllocatorConfig& config)
     : pmem_(pmem),
       pmem_size_(pmem_size),
-      thread_manager_(std::make_shared<ThreadManager>(max_access_threads)),
-      block_size_(config.allocation_unit),
       segment_size_(config.segment_size),
-      bg_thread_interval_(config.bg_thread_interval),
+      block_size_(config.allocation_unit),
       max_classified_record_block_size_(
           CalculateBlockSize(config.max_allocation_size)),
+      bg_thread_interval_(config.bg_thread_interval),
       max_allocation_size_(config.max_allocation_size),
-      segment_record_size_(pmem_size / segment_size_, 0),
       pool_(max_classified_record_block_size_),
-      thread_cache_(max_access_threads, max_classified_record_block_size_),
       segment_head_(0),
+      segment_record_size_(pmem_size / segment_size_, 0),
+      thread_cache_(max_access_threads, max_classified_record_block_size_),
+      thread_manager_(std::make_shared<ThreadManager>(max_access_threads)),
       closing_(false),
       instance_id_(next_instance_.fetch_add(1, std::memory_order_relaxed)) {
   if (instance_id_ > next_instance_) {
@@ -193,7 +194,8 @@ void ExperimentalPMemAllocator::PopulateSpace() {
       uint64_t offset = pmem_size_ * i / pu;
       // To cover the case that mapped_size_ is not divisible by pu.
       uint64_t len = std::min(pmem_size_ / pu, pmem_size_ - offset);
-      pmem_memset(pmem_ + offset, 0, len, PMEM_F_MEM_NONTEMPORAL);
+      // pmem_memset(pmem_ + offset, 0, len, PMEM_F_MEM_NONTEMPORAL);
+      memset(pmem_ + offset, 0, len);
     });
   }
   for (auto& t : ths) {
@@ -275,4 +277,7 @@ void* ExperimentalPMemAllocator::AllocateRaw(size_t alignment, size_t size) {
   }
   return ret;
 }
+
+REGISTER_MEM_ALLOCATOR("ExperimentalPMEMAllocator", 30,
+                       ExperimentalPMEMAllocatorFactory);
 }  // namespace tensorflow

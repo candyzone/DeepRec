@@ -123,11 +123,11 @@ static bool CheckDevDaxAndGetSize(const char* path, uint64_t* size) {
 
 class ThreadManager;
 
-struct Thread {
+struct AllocatorThread {
  public:
-  Thread() : id(-1), thread_manager(nullptr) {}
+  AllocatorThread() : id(-1), thread_manager(nullptr) {}
 
-  ~Thread();
+  ~AllocatorThread();
 
   void Release();
 
@@ -137,11 +137,11 @@ struct Thread {
 
 class ThreadManager : public std::enable_shared_from_this<ThreadManager> {
  public:
-  ThreadManager(uint32_t max_threads) : max_threads_(max_threads), ids_(0) {}
+  ThreadManager(uint32_t max_threads) : ids_(0), max_threads_(max_threads) {}
 
-  int MaybeInitThread(Thread& t);
+  int MaybeInitThread(AllocatorThread& t);
 
-  void Release(const Thread& t);
+  void Release(const AllocatorThread& t);
 
  private:
   std::atomic<uint32_t> ids_;
@@ -149,7 +149,6 @@ class ThreadManager : public std::enable_shared_from_this<ThreadManager> {
   uint32_t max_threads_;
   SpinMutex spin_;
 };
-}  // namespace tensorflow
 
 inline int create_dir_if_missing(const std::string& name) {
   int res = mkdir(name.c_str(), 0755) != 0;
@@ -165,3 +164,5 @@ inline int create_dir_if_missing(const std::string& name) {
   }
   return res;
 }
+
+}  // namespace tensorflow

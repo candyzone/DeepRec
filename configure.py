@@ -1434,6 +1434,8 @@ def main():
 
   set_build_var(environ_cp, 'TF_ENABLE_PMEM', 'PMEM', 'with_pmem_support',
                 False, 'pmem')
+  set_build_var(environ_cp, 'TF_ENABLE_EXPERIMENTAL_PMEM_ALLOCATOR', 'Experimental PMEM Allocator', 'experimental_pmem_allocator',
+                False, 'experimental_pmem_allocator')
 
 
   set_action_env_var(

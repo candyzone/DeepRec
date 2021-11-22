@@ -5,7 +5,7 @@
 #include "experimental_pmem_allocator.h"
 namespace tensorflow {
 
-void Thread::Release() {
+void AllocatorThread::Release() {
   assert(id == -1 || thread_manager != nullptr);
   if (thread_manager) {
     thread_manager->Release(*this);
@@ -14,9 +14,9 @@ void Thread::Release() {
   id = -1;
 }
 
-Thread::~Thread() { Release(); }
+AllocatorThread::~AllocatorThread() { Release(); }
 
-int ThreadManager::MaybeInitThread(Thread& t) {
+int ThreadManager::MaybeInitThread(AllocatorThread& t) {
   if (t.id < 0) {
     if (!usable_id_.empty()) {
       std::lock_guard<SpinMutex> lg(spin_);
@@ -38,7 +38,7 @@ int ThreadManager::MaybeInitThread(Thread& t) {
   return t.id;
 }
 
-void ThreadManager::Release(const Thread& t) {
+void ThreadManager::Release(const AllocatorThread& t) {
   std::lock_guard<SpinMutex> lg(spin_);
   usable_id_.insert(t.id);
 }
