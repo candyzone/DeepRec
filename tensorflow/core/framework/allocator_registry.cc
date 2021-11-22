@@ -89,7 +89,6 @@ Allocator* AllocatorFactoryRegistry::GetAllocator() {
 }
 
 Allocator* AllocatorFactoryRegistry::GetExperimentalPMEMAllocator() {
-  LOG(FATAL) << "!!!Get Experimental pmem allocator!!!";
   LOG(WARNING) << "!!!Get Experimental pmem allocator!!!";
 
   mutex_lock l(mu_);

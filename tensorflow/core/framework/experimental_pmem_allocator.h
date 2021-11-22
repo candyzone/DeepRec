@@ -19,8 +19,8 @@ namespace tensorflow {
 
 // these should be configurable, hard code them for now
 const string kPMemAllocatorPath = "/mnt/pmem0/pmem_allocator/";
-constexpr uint64_t kPMemSize = 128ULL << 30;
-constexpr uint64_t kMaxAccessThreads = 64;
+constexpr uint64_t kPMemSize = 512ULL << 30;
+constexpr uint64_t kMaxAccessThreads = 512;
 
 constexpr uint64_t kPMemNull = UINT64_MAX;
 constexpr uint64_t kMinMovableListSize = 8;
@@ -50,9 +50,9 @@ struct ExperimentalPMemAllocatorConfig {
         max_allocation_size(_max_allocation_size) {}
 
   uint64_t segment_size = 1 << 20;
-  uint32_t allocation_unit = 32;
+  uint32_t allocation_unit = 64;
   float bg_thread_interval = 1.0;
-  uint64_t max_allocation_size = 1024;
+  uint64_t max_allocation_size = 4096;
 };
 
 // Manage allocation/de-allocation of PMem space at block unit
