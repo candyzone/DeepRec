@@ -17,71 +17,42 @@ thread_local std::vector<AllocatorThread>
 ExperimentalPMemAllocator*
 ExperimentalPMemAllocator::NewExperimentalPMemAllocator(
     const std::string& pmem_file, uint64_t pmem_size,
-    uint32_t max_access_threads, bool devdax_mode,
+    uint32_t max_access_threads,
     const ExperimentalPMemAllocatorConfig& config) {
-  int cnt = 0;
-  if (++cnt > 1) {
-    LOG(WARNING) << "###### create pmem allocator" << pmem_file << " ########";
-  }
   if (!ExperimentalPMemAllocator::ValidateConfig(config)) {
     return nullptr;
   }
   int is_pmem;
   uint64_t mapped_size;
   char* pmem;
-  if (!devdax_mode) {
-    if ((pmem = (char*)pmem_map_file(pmem_file.c_str(), pmem_size,
-                                     PMEM_FILE_CREATE, 0666, &mapped_size,
-                                     &is_pmem)) == nullptr) {
-      fprintf(stderr, "PMem map file %s failed: %s\n", pmem_file.c_str(),
-              strerror(errno));
-      return nullptr;
-    }
+  if ((pmem =
+           (char*)pmem_map_file(pmem_file.c_str(), pmem_size, PMEM_FILE_CREATE,
+                                0666, &mapped_size, &is_pmem)) == nullptr) {
+    LOG(FATAL) << "PMem map file " << pmem_file
+               << " failed: " << strerror(errno);
+    return nullptr;
+  }
 
-    if (!is_pmem) {
-      fprintf(stderr, "%s is not a pmem path\n", pmem_file.c_str());
-      return nullptr;
-    }
-
-  } else {
-    if (!CheckDevDaxAndGetSize(pmem_file.c_str(), &mapped_size)) {
-      fprintf(stderr, "CheckDevDaxAndGetSize %s failed device %s faild: %s\n",
-              pmem_file.c_str(), strerror(errno));
-      return nullptr;
-    }
-
-    int flags = PROT_READ | PROT_WRITE;
-    int fd = open(pmem_file.c_str(), O_RDWR, 0666);
-    if (fd < 0) {
-      fprintf(stderr, "Open devdax device %s faild: %s\n", pmem_file.c_str(),
-              strerror(errno));
-      return nullptr;
-    }
-
-    if ((pmem = (char*)mmap(nullptr, pmem_size, flags, MAP_SHARED, fd, 0)) ==
-        nullptr) {
-      fprintf(stderr, "Mmap devdax device %s faild: %s\n", pmem_file.c_str(),
-              strerror(errno));
-      return nullptr;
-    }
+  if (!is_pmem) {
+    LOG(FATAL) << pmem_file << " is not a valid pmem path";
+    return nullptr;
   }
 
   if (mapped_size != pmem_size) {
-    fprintf(stderr, "Pmem map file %s size %lu is not same as expected %lu\n",
-            pmem_file.c_str(), mapped_size, pmem_size);
+    LOG(FATAL) << "PMem map file " << pmem_file << " size " << mapped_size
+               << " is not same as expected " << pmem_size;
     return nullptr;
   }
 
   ExperimentalPMemAllocator* allocator = nullptr;
   try {
-    allocator = new ExperimentalPMemAllocator(pmem, pmem_size,
+    allocator = new ExperimentalPMemAllocator(pmem, pmem_file, pmem_size,
                                               max_access_threads, config);
   } catch (std::bad_alloc& err) {
-    fprintf(stderr, "Error while initialize ExperimentalPMemAllocator: %s\n",
-            err.what());
+    LOG(FATAL) << "Error while initialize ExperimentalPMemAllocator "
+               << err.what();
     return nullptr;
   }
-  printf("Map pmem space done\n");
   return allocator;
 }
 
@@ -110,7 +81,8 @@ void ExperimentalPMemAllocator::BackgroundWork() {
     usleep(bg_thread_interval_ * 1000000);
     // Move cached list to pool
     std::vector<void*> moving_list;
-    for (auto& tc : thread_cache_) {
+    for (size_t i = 0; i < thread_cache_.size(); i++) {
+      auto& tc = thread_cache_[i];
       moving_list.clear();
       for (size_t b_size = 1; b_size < tc.freelists.size(); b_size++) {
         moving_list.clear();
@@ -130,9 +102,10 @@ void ExperimentalPMemAllocator::BackgroundWork() {
 }
 
 ExperimentalPMemAllocator::ExperimentalPMemAllocator(
-    char* pmem, uint64_t pmem_size, uint32_t max_access_threads,
-    const ExperimentalPMemAllocatorConfig& config)
+    char* pmem, const std::string& pmem_file_name, uint64_t pmem_size,
+    uint32_t max_access_threads, const ExperimentalPMemAllocatorConfig& config)
     : pmem_(pmem),
+      pmem_file_(pmem_file_name),
       pmem_size_(pmem_size),
       segment_size_(config.segment_size),
       block_size_(config.allocation_unit),
@@ -148,7 +121,7 @@ ExperimentalPMemAllocator::ExperimentalPMemAllocator(
       closing_(false),
       instance_id_(next_instance_.fetch_add(1, std::memory_order_relaxed)) {
   if (instance_id_ > next_instance_) {
-    fprintf(stderr, "too many instance created (>%lu), abort\n", kMaxInstance);
+    LOG(FATAL) << "too many instance created (>" << kMaxInstance << "), abort";
     throw std::bad_alloc();
   }
   init_data_size_2_block_size();
@@ -165,7 +138,8 @@ void ExperimentalPMemAllocator::DeallocateRaw(void* addr) {
   int t_id = MaybeInitAccessThread();
 
   if (t_id < 0) {
-    fprintf(stderr, "too many thread access allocator!\n");
+    LOG(FATAL) << "too many thread access allocator! max threads: "
+               << kMaxAccessThreads;
     std::abort();
   }
 
@@ -185,7 +159,7 @@ void ExperimentalPMemAllocator::DeallocateRaw(void* addr) {
 }
 
 void ExperimentalPMemAllocator::PopulateSpace() {
-  printf("Polulating PMem space ...\n");
+  LOG(WARNING) << "Polulating PMem space ...";
   std::vector<std::thread> ths;
 
   int pu = 16;  // 16 is a moderate concurrent number for writing PMem.
@@ -201,7 +175,6 @@ void ExperimentalPMemAllocator::PopulateSpace() {
   for (auto& t : ths) {
     t.join();
   }
-  printf("Populating done\n");
 }
 
 ExperimentalPMemAllocator::~ExperimentalPMemAllocator() {
@@ -210,6 +183,7 @@ ExperimentalPMemAllocator::~ExperimentalPMemAllocator() {
     t.join();
   }
   pmem_unmap(pmem_, pmem_size_);
+  remove(pmem_file_.c_str());
 }
 
 bool ExperimentalPMemAllocator::AllocateSegmentSpace(Segment* segment,
@@ -232,17 +206,17 @@ void* ExperimentalPMemAllocator::AllocateRaw(size_t alignment, size_t size) {
   void* ret = nullptr;
   int t_id = MaybeInitAccessThread();
   if (t_id < 0) {
-    fprintf(stderr, "too many thread access allocator!\n");
+    LOG(FATAL) << "too many thread access allocator! max threads: "
+               << kMaxAccessThreads;
     return nullptr;
   }
   uint32_t b_size = Size2BlockSize(size);
   uint32_t aligned_size = b_size * block_size_;
   if (aligned_size > max_allocation_size_ || aligned_size == 0) {
-    fprintf(
-        stderr,
-        "allocating size: %lu size, size is 0 or larger than PMem allocator "
-        "max allocation size %lu\n",
-        size, max_allocation_size_);
+    LOG(FATAL)
+        << "allocating size: " << size
+        << " size, size is 0 or larger than PMem allocator max allocation size "
+        << max_allocation_size_;
     return nullptr;
   }
   auto& thread_cache = thread_cache_[t_id];

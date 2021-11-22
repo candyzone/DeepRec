@@ -15,7 +15,7 @@ limitations under the License.
 
 #include <atomic>
 
-#include "/usr/local/include/memkind.h"
+#include "memkind.h"
 #include "tensorflow/core/framework/allocator.h"
 #include "tensorflow/core/framework/allocator_registry.h"
 #include "tensorflow/core/framework/tracking_allocator.h"

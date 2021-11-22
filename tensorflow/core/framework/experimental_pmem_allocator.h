@@ -17,14 +17,15 @@
 
 namespace tensorflow {
 
-// these should be configurable, hard code them for now
+// These should be configurable, as this is a experimental edition, hardcode
+// them for fast development
 const string kPMemAllocatorPath = "/mnt/pmem0/pmem_allocator/";
-constexpr uint64_t kPMemSize = 512ULL << 30;
-constexpr uint64_t kMaxAccessThreads = 512;
+const uint64_t kPMemSize = 512ULL << 30;
+const uint64_t kMaxAccessThreads = 512;
+const uint64_t kMaxInstance = 1024;
 
 constexpr uint64_t kPMemNull = UINT64_MAX;
 constexpr uint64_t kMinMovableListSize = 8;
-constexpr uint64_t kMaxInstance = 1024;
 
 // bg_thread_interval: interval to call bg thread to balance freed space among
 // access threads
@@ -67,22 +68,19 @@ class ExperimentalPMemAllocator : public Allocator {
   // pmem_size: max usable space max_access_threads: max concurrent
   // threads to access this allocator, resource of a access thread is release
   // only if the thread exit or call allocator->Release()
-  // devdax_mode: if set true, use devdax device instead of file system
   // config: allocator internal configs
   //
   // See doc/pmem_allocator.md for more details
   static ExperimentalPMemAllocator* NewExperimentalPMemAllocator(
       const std::string& pmem_file, uint64_t pmem_size,
-      uint32_t max_access_threads, bool devdax_mode,
+      uint32_t max_access_threads,
       const ExperimentalPMemAllocatorConfig& config);
 
-  ExperimentalPMemAllocator(char* pmem, uint64_t pmem_size,
-                            uint32_t max_access_threads,
+  ExperimentalPMemAllocator(char* pmem, const std::string& pmem_file_name,
+                            uint64_t pmem_size, uint32_t max_access_threads,
                             const ExperimentalPMemAllocatorConfig& config);
 
-  ExperimentalPMemAllocator(char* pmem, uint64_t pmem_size,
-                            uint64_t segment_size, uint32_t block_size,
-                            uint32_t max_access_threads);
+  ExperimentalPMemAllocator(const ExperimentalPMemAllocator&) = delete;
 
   ~ExperimentalPMemAllocator();
 
@@ -103,11 +101,12 @@ class ExperimentalPMemAllocator : public Allocator {
     access_threads_[instance_id_].Release();
   }
 
-  // Populate PMem space so the following access can be faster
-  // Warning! this will zero the entire PMem space
+  // Populate PMem space on init a new instance, so the following access can be
+  // faster This will zero the entire PMem space
   void PopulateSpace();
 
-  // Regularly execute by background thread
+  // Regularly execute by background thread, move freelist of thread caches to
+  // pool
   void BackgroundWork();
 
   void ClearStats() override {}
@@ -124,24 +123,24 @@ class ExperimentalPMemAllocator : public Allocator {
     auto is_2pown = [](uint64_t n) { return (n > 0) && (n & (n - 1)) == 0; };
 
     if (config.allocation_unit < 8) {
-      fprintf(stderr, "allocation unit should > 8\n");
+      LOG(FATAL) << "allocation unit should > 8";
       return false;
     }
 
     if (!is_2pown(config.allocation_unit)) {
-      fprintf(stderr, "allocation unit should be 2^n\n");
+      LOG(FATAL) << "allocation unit should be 2^n";
       return false;
     }
 
     if (config.max_allocation_size > config.allocation_unit * 1024) {
-      fprintf(stderr,
-              "max allocation size should <= allocation_unit * 1024 \n");
+      LOG(FATAL) << "max allocation size should <= allocation_unit * 1024";
+      return false;
     }
 
     if (config.segment_size < 1 << 20) {
-      fprintf(stderr,
-              "segment_size should larger than 1MB and max_allocation_size ( "
-              "recommand > 128 * max_allocation_size) for performance.\n");
+      LOG(FATAL)
+          << "segment_size should larger than 1MB and max_allocation_size ( "
+             "recommand > 128 * max_allocation_size) for performance";
       return false;
     }
 
@@ -249,12 +248,14 @@ class ExperimentalPMemAllocator : public Allocator {
           segments(max_classified_block_size + 1),
           locks(max_classified_block_size + 1) {}
 
+    ThreadCache(const ThreadCache&) = delete;
+
     // A array of array to store freed space, the space size is aligned to
     // block_size_, each array corresponding to a dedicated block size which is
     // equal to its index
     FixVector<FreeList> freelists;
-    // AllocatorThread own segments, each segment corresponding to a dedicated block size
-    // which is equal to its index
+    // AllocatorThread own segments, each segment corresponding to a dedicated
+    // block size which is equal to its index
     FixVector<Segment> segments;
     // Protect freelists;
     FixVector<SpinMutex> locks;
@@ -286,6 +287,7 @@ class ExperimentalPMemAllocator : public Allocator {
   }
 
   char* pmem_;
+  const std::string pmem_file_;
   const uint64_t pmem_size_;
   const uint64_t segment_size_;
   const uint32_t block_size_;
@@ -297,7 +299,7 @@ class ExperimentalPMemAllocator : public Allocator {
   std::atomic<uint64_t> segment_head_;
   std::vector<uint32_t> segment_record_size_;
 
-  std::vector<ThreadCache> thread_cache_;
+  FixVector<ThreadCache> thread_cache_;
   std::shared_ptr<ThreadManager> thread_manager_;
   std::vector<std::thread> bg_threads_;
   // For quickly get corresponding block size of a requested data size
@@ -315,14 +317,14 @@ class ExperimentalPMEMAllocatorFactory : public AllocatorFactory {
   Allocator* CreateAllocator() override {
     int res = create_dir_if_missing(kPMemAllocatorPath);
     if (res != 0) {
-      fprintf(stderr, "create pmem allocator path %s error\n",
-              kPMemAllocatorPath.c_str());
+      LOG(FATAL) << "create pmem allocator path " << kPMemAllocatorPath
+                 << " error";
       return nullptr;
     }
     std::string allocator_file(kPMemAllocatorPath +
                                std::to_string(allocator_cnt_.fetch_add(1)));
     return ExperimentalPMemAllocator::NewExperimentalPMemAllocator(
-        allocator_file, kPMemSize, kMaxAccessThreads, false,
+        allocator_file, kPMemSize, kMaxAccessThreads,
         ExperimentalPMemAllocatorConfig());
   }
 
