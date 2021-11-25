@@ -112,11 +112,14 @@ class ExperimentalPMemAllocator : public Allocator {
   void ClearStats() override {}
 
   size_t AllocatedSizeSlow(const void* ptr) const override {
-    return 0;
+    // return 0;
     // TODO: return allocated size
-    // auto segment = Addr2Segment(ptr);
-    // assert(segment < segment_record_size_.size());
-    // return segment_record_size_[segment];
+    auto segment = Addr2Segment(ptr);
+    if(segment >= segment_record_size_.size()){
+      LOG(FATAL) << "ptr is not allocated by this allocator";
+      return 0;
+    }
+    return segment_record_size_[segment];
   }
 
   static bool ValidateConfig(const ExperimentalPMemAllocatorConfig& config) {
@@ -210,14 +213,14 @@ class ExperimentalPMemAllocator : public Allocator {
     return thread_manager_->MaybeInitThread(access_threads_[instance_id_]);
   }
 
-  inline void* Offset2Addr(uint64_t offset) {
+  inline void* Offset2Addr(uint64_t offset) const {
     if (ValidateOffset(offset)) {
       return pmem_ + offset;
     }
     return nullptr;
   }
 
-  inline uint64_t Addr2Offset(const void* addr) {
+  inline uint64_t Addr2Offset(const void* addr) const {
     if (addr) {
       uint64_t offset = (char*)addr - pmem_;
       if (ValidateOffset(offset)) {
@@ -227,16 +230,16 @@ class ExperimentalPMemAllocator : public Allocator {
     return kPMemNull;
   }
 
-  inline void* Segment2Addr(uint64_t segment) {
+  inline void* Segment2Addr(uint64_t segment) const {
     return Offset2Addr(segment * segment_size_);
   }
 
-  inline uint64_t Addr2Segment(const void* addr) {
+  inline uint64_t Addr2Segment(const void* addr) const {
     uint64_t offset = Addr2Offset(addr);
     return offset == kPMemNull ? kPMemNull : offset / segment_size_;
   }
 
-  inline bool ValidateOffset(uint64_t offset) {
+  inline bool ValidateOffset(uint64_t offset) const {
     return offset < pmem_size_ && offset != kPMemNull;
   }
 
