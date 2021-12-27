@@ -434,12 +434,6 @@ config_setting(
 )
 
 config_setting(
-    name = "experimental_pmem_allocator",
-    values = {"define": "experimental_pmem_allocator=true"},
-    visibility = ["//visibility:public"],
-)
-
-config_setting(
     name = "with_mpi_support",
     values = {"define": "with_mpi_support=true"},
     visibility = ["//visibility:public"],

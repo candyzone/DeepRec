@@ -96,7 +96,7 @@ Allocator* pmem_allocator() {
 Allocator* experimental_pmem_allocator() {
   static Allocator* experimental_pmem_allocator =
       AllocatorFactoryRegistry::singleton()->GetExperimentalPMEMAllocator();
-  if (cpu_allocator_collect_full_stats &&
+  if (experimental_pmem_allocator && cpu_allocator_collect_full_stats &&
       !experimental_pmem_allocator->TracksAllocationSizes()) {
     experimental_pmem_allocator =
         new TrackingAllocator(experimental_pmem_allocator, true);

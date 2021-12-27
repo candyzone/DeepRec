@@ -1015,15 +1015,11 @@ cc_library(
     ] + select({
         "//tensorflow:with_pmem_support": [
             "framework/pmem_allocator.cc",
-        ],
-        "//conditions:default": [],
-    }) + select({
-        "//tensorflow:experimental_pmem_allocator": [
             "framework/experimental_pmem_allocator.cc",
             "framework/experimental_pmem_allocator_utils.cc",
             "framework/experimental_pmem_allocator.h",
             "framework/experimental_pmem_allocator_utils.h",
-            ], 
+        ],
         "//conditions:default": [],
     }),
     deps = [
@@ -1036,11 +1032,6 @@ cc_library(
         "//tensorflow:with_pmem_support": [
             "-L/usr/local/lib",
             "-lmemkind",
-        ],
-        "//conditions:default": [],
-    }) + select({
-        "//tensorflow:experimental_pmem_allocator": [
-            "-L/usr/local/lib",
             "-lpmem",
         ],
         "//conditions:default": [],
