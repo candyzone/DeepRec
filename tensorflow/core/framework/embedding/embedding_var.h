@@ -68,7 +68,7 @@ class EmbeddingVar : public ResourceBase {
     }
   }
 
-  Status Init(const Tensor& default_tensor) {
+  Status Init(const Tensor& default_tensor, int64 default_value_dim) {
     if (LayoutType::LIGHT == emb_config_.get_layout_type()) {
       new_value_ptr_fn = [] (size_t size) { return new LightValuePtr<V>(size); };
     } else if (LayoutType::NORMAL == emb_config_.get_layout_type()) {
@@ -92,41 +92,6 @@ class EmbeddingVar : public ResourceBase {
       alloc_ = experimental_pmem_allocator();
       if (!alloc_) {
         return errors::InvalidArgument(name_, ", No registered PMEM_LIBPMEM AllocatorFactory.");
-      }
-    } else {
-      return errors::InvalidArgument(name_, ", Unsupport EmbeddingVariable StorageType.");
-    }
-
-    if (kv_ == nullptr) {
-       return errors::InvalidArgument("Invalid ht_type to construct EmbeddingVar");
-    } else {
-      value_len_ = default_tensor.NumElements();
-      default_value_ = TypedAllocator::Allocate<V>(alloc_, default_tensor.NumElements(), AllocationAttributes());
-      auto default_tensor_flat = default_tensor.flat<V>();
-      memcpy(default_value_, &default_tensor_flat(0), default_tensor.TotalBytes());
-      return Status::OK();
-    }
-  }
-
-  Status Init(const Tensor& default_tensor, int64 default_value_dim) {
-    if (LayoutType::LIGHT == emb_config_.get_layout_type()) {
-      new_value_ptr_fn = [] (size_t size) { return new LightValuePtr<V>(size); };
-    } else if (LayoutType::NORMAL == emb_config_.get_layout_type()) {
-      new_value_ptr_fn = [] (size_t size) { return new NormalValuePtr<V>(size); };
-    } else {
-      return errors::InvalidArgument(name_, ", Unsupport EmbeddingVariable LayoutType.");
-    }
-    filter_ = FilterFactory::CreateFilter<K, V, EmbeddingVar<K, V>>(emb_config_, this);
-
-    if (embedding::StorageType::DRAM == emb_config_.get_storage_type()) {
-      alloc_ = ev_allocator();
-      if (!alloc_) {
-        return errors::InvalidArgument(name_, ", No registered EV AllocatorFactory.");
-      }
-    } else if (embedding::StorageType::PMEM == emb_config_.get_storage_type()) {
-      alloc_ = pmem_allocator();
-      if (!alloc_) {
-        return errors::InvalidArgument(name_, ", No registered PMEM AllocatorFactory.");
       }
     } else {
       return errors::InvalidArgument(name_, ", Unsupport EmbeddingVariable StorageType.");
