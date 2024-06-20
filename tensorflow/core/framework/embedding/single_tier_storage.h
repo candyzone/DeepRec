@@ -85,16 +85,15 @@ class SingleTierStorage : public Storage<K, V> {
 
   void Insert(K key, ValuePtr<V>** value_ptr,
               int64 alloc_len) override {
-    do {
-      *value_ptr = layout_creator_->Create(alloc_, alloc_len);
-      Status s = kv_->Insert(key, *value_ptr);
-      if (s.ok()) {
-        break;
-      } else {
-        (*value_ptr)->Destroy(alloc_);
-        delete *value_ptr;
-      }
-    } while (!(kv_->Lookup(key, value_ptr)).ok());
+    Status s = kv_->Lookup(key, value_ptr);
+    if (s.ok()) {
+      (*value_ptr)->Destroy(alloc_);
+      delete *value_ptr;
+      TF_CHECK_OK(kv_->Remove(key));
+    }
+
+    *value_ptr = layout_creator_->Create(alloc_, alloc_len);
+    TF_CHECK_OK(kv_->Insert(key, *value_ptr));
   }
 
   void Insert(K key, ValuePtr<V>* value_ptr) override {
